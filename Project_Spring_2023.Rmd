@@ -1,0 +1,536 @@
+---
+title: "An Infographic Analysis of Criminal Behavior Pattern and Trend of Crime in Iowa"
+author: "Farah Ahmed & Sanzida Rahman Setu"
+date: "`r format(Sys.Date(), '%B %e, %Y')`"
+output: 
+ html_document:
+  toc: True
+  toc_depth: 1
+  number_sections: true
+  code_folding: hide 
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r, include=FALSE,message=FALSE,warning=FALSE}
+#loading libraries
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(lattice)
+library(ggridges)
+library(kableExtra)
+library(plotly)
+library(paletteer)
+library(ggpubr)
+```
+
+
+# Background of the problem
+
+The United States of America is known for having one of the highest crime rates in the world. Iowa, a Midwestern state in the United States, has a population of approximately 3.2 million people. Like many other states in the US, Iowa faces challenges related to crime and incarceration. While the state has a lower crime rate compared to many other states, it still faces issues related to public safety and criminal justice. In this project we choose the two datasets, `Iowa Prison Admissions` and `Offenders Released from Iowa Prisons` to analyze the data and visualize the the functioning of the criminal justice system, including patterns in arrests, convictions, and sentencing in Iowa State. The criminal justice system in the state of Iowa is an essential aspect of the state's efforts to maintain public safety and uphold the law. To better understand the functioning of the system, data on the number of offenders admitted and released from Iowa prisons over the last ten years can provide valuable insights into the patterns and trends of incarceration in the state. It can also identify areas where policies and interventions could be implemented to improve the effectiveness and fairness of the criminal justice system.
+
+## Research Questions
+
+1.  Are there any temporal variation (increase/decrease) in types of offenses over the years?
+
+2.  What are the trends in crime rates in different jurisdictions or counties over time?
+
+3. How does the severity and frequency of crimes vary by demographic factors such as age, gender and race?
+
+    * How does age relate to the types of crimes committed by offenders?
+
+    * What is the ratio of Race & Ethnicity and Gender of Offenders?
+
+6.  What are the average sentence length in the prisons of Iowa by different types of offense?
+
+
+# Data Description 
+
+The initial datasets are collected from Iowa Data portal (data.iowa.gov). For addressing the research questions, two datasets are extracted from the source. One dataset provides information regarding offenders admitted to Penitentiaries and Correctional Facilities in Iowa during the last 10 year. The other provides information regarding the release of individuals from prisons in Iowa with specific location of occurrence in the last 10 years. Since our research questions seek to observe geographic pattern of crime, the two datasets will be merged together in order to obtain the location details of crime. The prison admission dataset contains **16 variables** and **49706 observations** while the release from prison dataset contains **18 variables** and **55900 observations**. 
+
+Variables of interest in two datasets are:
+
+**Prison Admission Data**
+
+* Record ID
+* Offender Number
+* Fiscal Year Admitted 
+* Sex
+* Race & Ethnicity
+* Supervising Institution 
+* Offense Type
+* Offense Subtype
+* Age at Admission
+* Months Served
+
+**Prison Release Data**
+
+* Record ID
+* Jurisdiction
+
+
+
+```{r, include=FALSE}
+if (! file.exists("Iowa_Prison_Admissions.csv.gz"))
+    download.file("https://stat.uiowa.edu/~luke/STAT4580-data/ssetu/Iowa_Prison_Admissions.csv.gz",
+                  "Iowa_Prison_Admissions.csv.gz")
+data_admit <- read_csv("Iowa_Prison_Admissions.csv.gz")
+head(data_admit)
+
+if (! file.exists("Offenders_Released_from_Iowa_Prisons.csv.gz"))
+    download.file("https://stat.uiowa.edu/~luke/STAT4580-data/ssetu/Offenders_Released_from_Iowa_Prisons.csv.gz", "Offenders_Released_from_Iowa_Prisons.csv.gz")
+data_release <- read_csv("Offenders_Released_from_Iowa_Prisons.csv.gz")
+head(data_release)
+```
+
+
+# Data Pre-Processing
+
+For analyzing the research questions, the initial datasets are manipulated and manual transformation are done. Both `data_admit` and `data_released` were joined together to make a comprehensive dataset for addressing the research questions. Necessary variables were also created for data analysis. There are a number of variables in both datasets and some would be common after joining. To avoid redundancy the datasets were cut smaller with only the varibales of interests. For the purpose of analysis, some observations are merged together and some are given more intuitive names. For the purpose of analysis and visualization, the character variables are transformed into factor variables. To analyze some research questions, a few variables were created which contains the total number of offense per year and percentage of different offenses per year **Offense Count**, **Yearly_total_offense** would represent the total number of offense occurred per year. 
+
+
+
+```{r, include=FALSE}
+## Subtracting the variables of interest, merging both datasets and check dimension
+data_admit = data_admit %>% 
+  select(`Record ID`, `Offender Number`, `Fiscal Year Admitted`, Sex, `Race & Ethnicity` , `Supervising Institution`, `Offense Type`, `Offense Subtype`, `Age at Admission`, `Months Served`)
+
+data_release <- data_release %>% 
+  select( `Age at Release`, `Fiscal Year Released`, Jurisdiction, `Record ID`)
+
+data <- merge(data_admit, data_release, by=c("Record ID"))
+
+
+
+## Classyfication of Observation
+data$`Offense Type` = recode(data$`Offense Subtype`,
+                              "Alcohol" = "Alcohol Abuse", "Animals" = "Animal Cruelty",
+                              "Other Drug" = "Drug Abuse", "Other Government" = "Other Offenses",
+                              "Other Criminal" = "Other Offenses", "Other Public Order" = "Other Offenses",
+                              "Other Violent" = "Other Offenses", "OWI" = "Operating While Intoxicated",
+                              "Sex" = "Sexual Offense", "Traffic" = "Obstructing Traffic", 
+                              "Trafficking" = "Drug Trafficking")
+
+
+## Transformation of Variables of Interest
+data = data %>% mutate(Sex = as_factor(Sex)) %>% 
+  mutate(`Race & Ethnicity` = as_factor(`Race & Ethnicity`)) %>% 
+  mutate(`Supervising Institution` = as_factor(`Supervising Institution`)) %>% 
+  mutate(Jurisdiction = as_factor(Jurisdiction)) %>% 
+  mutate(`Offense Type` = as_factor(`Offense Type`))
+
+
+## Creation of New Variables for Analysis
+data = data %>% 
+  mutate(No_of_Offense =  1)
+data = data %>% 
+  group_by(`Fiscal Year Admitted`) %>% 
+  mutate(Yearly_total_offense = sum(No_of_Offense)) %>% 
+  ungroup()
+
+```
+
+**Dataset after join and adding new variables**
+
+```{r}
+dim(data)
+data %>% 
+  select(No_of_Offense, Yearly_total_offense, everything()) %>% 
+  head()
+```
+
+# Data Analysis and Interpretation
+
+## Temporal Variation of Crime from 2013 - 2022
+
+This part of the analysis address the first research question of this study - "Are there any temporal variation (increase/decrease) in types of offenses over the years?"
+
+Through this analysis we tried to observe the percentage of different types of offenses from 2012 to 2022 and investigate their pattern over the years.
+
+### Data Manipulation for Research Question - 1
+
+For this analysis the percentage of each type of offense in each year was estimated. The new variable `pct_off_by_yr` represents the proportion of different offense in each year. Missing values were addressed properly. 
+
+
+```{r}
+rq1 = data %>% 
+  group_by(`Fiscal Year Admitted`, `Offense Type`) %>% 
+  summarise(tot_off_by_type_yr = sum(No_of_Offense)) %>%   # total no of offense by type in each year
+  ungroup() %>% 
+  drop_na()
+
+rq1 = rq1 %>% 
+  group_by(`Fiscal Year Admitted`) %>% 
+  mutate(total_by_yr = sum(tot_off_by_type_yr)) %>%   # total no of offense in each year
+  ungroup()
+
+rq1 = rq1 %>% 
+  mutate(pct_off_by_yr = (tot_off_by_type_yr/total_by_yr)*100)
+head(rq1)
+```
+
+### Trend Analysis
+
+
+```{r}
+rq1 %>% 
+  ggplot(aes(x = pct_off_by_yr,
+             y = reorder(`Offense Type`, pct_off_by_yr)))+
+  geom_bar(fill = "red", stat = "identity",
+           position = "dodge")+
+  geom_point(size = 1.8)+
+    facet_wrap(~`Fiscal Year Admitted`, nrow = 3)+
+  scale_x_continuous(breaks = seq(0, 100, by = 10),
+                     expand = c(0,0))+
+  scale_y_discrete(expand = c(0,0))+
+  labs(x = "Yearly Percentage",
+       y = "Offense Type",
+       caption = "Figure-1: Average Percentage of Different Offense over the Years")+
+  theme_minimal()+
+  theme(axis.text = element_text(size = 6),
+        plot.caption = element_text(hjust = 0))
+```
+
+
+Since 2013, drug trafficking is one of the major crime in Iowa (Figure-1) that has the highest occurrence tendency. The other frequent crimes are assault, burglary theft, operating while intoxicated and other offenses- the type of which weren't explained in details in the original dataset. It is notable that although drag trafficking is the major issue in Iowa, over the years, the average percentage of drug trafficking has been decrease while other random crime rate has been increased since 2018. It is also noticeable that the rate of kidnap has been increased and the rate of alcohol abuse decreased although not significantly. 
+
+
+### top 5 types of offense that were most occured in 2022
+
+The following table shows the top five crimes for which prisoners have been admitted in Iowa prison facilities in 2022. 
+
+```{r}
+rq1 %>% filter(`Fiscal Year Admitted` == 2022) %>% 
+  group_by(`Offense Type`) %>% 
+  summarise(n = sum(tot_off_by_type_yr)) %>% 
+  arrange(desc(n)) %>% 
+  slice_max(n, n = 5) %>% 
+  kbl(col.names = c("Offense Type", "Total Occurence in 2022"),
+      align = "ccc") %>% 
+  kable_styling(full_width = F)
+```
+
+The number of different minor and other public order violation or government offense along with drug trafficking were high in 2022. The other 3 top of offense/crime were assault, burglary and theft.
+
+
+### Trend of top 5 types of offense that occured most in 2022
+
+```{r}
+line_chart = rq1 %>% filter(`Offense Type` == "Other Offenses" |
+                  `Offense Type` == "Drug Trafficking" |
+                  `Offense Type` == "Assault" |
+                  `Offense Type` ==  "Burglary" |
+                  `Offense Type` == "Theft")
+
+rq1 %>%  
+  ggplot(aes(x = factor(`Fiscal Year Admitted`),
+             y = pct_off_by_yr,
+             color = `Offense Type`,
+             group = `Offense Type`))+
+  geom_line(color = "gray")+
+  geom_line(data = line_chart, size = 1)+
+  scale_x_discrete(expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  labs(caption = "Figure-2: Temporal Variation of Top 5 Offense in 2022 Over the Years",
+       x = "Year",
+       y = "Average Percentage")+
+  scale_color_manual(values = c("black", "red", "blue", "green", "orange"))+
+  theme_minimal()+
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+Figure-2 shows the trend of most occurred crimes in 2022 since 2013. Although drug trafficking rate declined significantly, it was still the most occurred crime in Iowa in recent years. The number of assault and other types of crime has been increased significantly in the recent years which should be an issue of concern. 
+
+
+## Spatial Variation of from 2013 - 2022
+
+We investigated the second research question of this study - "What are the trends in crime rates in different jurisdictions or counties over time?". We looked at the crime rate over the 10 years in every jurisdiction in Iowa and identified any significant patterns or changes over the years.
+
+### Data Manipulation for Research Question - 2
+
+For this analysis, several new variables were created to obtain the proportion of crime in each jurisdiction in each year. the `total_yrly_jur` represents number of total crime in each year in each jurisdiction, `yearly_total` represents total number of crime in each year in Iowa State, and `pct_yrly_jur` contains proportion of yearly crime in each jurisdiction. To show the proportions in maps,the spatial values of each county (latitudes and longitudes) were obtained and joined with the dataset.
+
+```{r}
+rq2 = data %>% group_by(`Fiscal Year Admitted`, Jurisdiction) %>% 
+  summarise(total_yrly_jur = sum(No_of_Offense, na.rm = T)) %>% #yearly total crime in each jurisdiction
+  drop_na() %>% 
+  ungroup()
+
+rq2 = rq2 %>% group_by(`Fiscal Year Admitted`) %>% 
+  mutate(yearly_total = sum(total_yrly_jur)) %>%     #yearly total crime combining all jurisdiction
+  ungroup()
+
+rq2 = rq2 %>% mutate(pct_yrly_jur = (total_yrly_jur/yearly_total)*100)  #pct of yearly crime in each jurisdiction
+
+
+rq2_map <- rq2 %>%  #making one rows per jurisdiction so that it joins with geographic data(iowa)
+  select(`Fiscal Year Admitted`, Jurisdiction, pct_yrly_jur) %>% 
+  pivot_wider(names_from = `Fiscal Year Admitted`,
+              values_from = pct_yrly_jur) 
+
+rq2_map$Jurisdiction = toupper(rq2_map$Jurisdiction) #making all uppercase so it matches with iowa$subregion 
+
+
+iowa <- map_data("county", "iowa") # getting lat, long
+iowa$subregion = toupper(iowa$subregion) #making all uppercase so it matches with rq2$jurisdictions
+
+map <- left_join(iowa, rq2_map, by = c("subregion" = "Jurisdiction")) 
+
+map <- map %>%  #making this so that the points stay in the middle of each county
+  group_by(subregion) %>% 
+  mutate(x = mean(range(long)),
+            y = mean(range(lat)))
+
+map2 <- map %>%   #again changing the dimension to show yearly changes
+  pivot_longer(cols = `2013`:`2022`,
+               names_to = "year",
+               values_to = "pct") %>% 
+  drop_na()
+
+head(map2)
+```
+
+
+### Iowa County maps showing yearly percentage of crime since 2013 - 2022
+
+
+```{r}
+p = map2 %>% ggplot()+
+  geom_polygon(aes(x = long,
+                   y = lat, na.rm = T, 
+                   group = group,
+                   fill = pct, text = subregion),
+               color = "grey")+
+  coord_map()+
+  facet_wrap(~ year)+
+  scale_fill_viridis_c(option = "A", direction = -1)+
+  labs(caption = "Map-1: Percentage of Crime in Iowa Counties in 2022",
+       x = "Longitude",
+       y = "Latitude",
+       fill = "Percentage Crime")+
+  theme_void()+
+  theme(plot.caption = element_text(hjust = 0))
+  
+
+ggplotly(p, tooltip = "subregion") %>% 
+  style(hoverlabel = list(bgcolor = "white")) 
+```
+
+
+The map shows that a most of the crimes occurred in a few counties and the crime rate in those particular counties like Polk, Black Hawk, Scott counties are almost the same since 2013. The crime data for O'Brien county (2013-2022) and Worth county (2017) were missing which are showed in white space.  
+
+
+### Top 10 Counties with Higesht Proportion of Crime Occurrence in 2022
+
+
+```{r}
+rq2 %>% filter(`Fiscal Year Admitted` == 2022) %>% 
+  arrange(desc(pct_yrly_jur)) %>%
+  slice(1:10) %>% 
+  select(Jurisdiction, total_yrly_jur, pct_yrly_jur) %>% 
+  kbl(col.names = c("Jurisdictions", "Total Occurence in 2022", "Percentage of Total Crime in 2022"),
+      align = "ccc") %>% 
+  kable_styling(full_width = F)
+```
+
+To further investigate the crime hot-spots 10 counties were identified where the crime rates were the highest in 2022. In 2022, the crime rate in Polk county was significantly high than other counties in Iowa. Although the crime rate in Black Hawk, Scott and Woodbury counties were not as high as Polk county, these are still the areas where crime rates were higher than other places. 
+
+### Trend of Crime Occurrence in top 10 Jurisdictions with Higesht Proportion of Crime Occurrence in 2022
+
+
+```{r}
+rq2 %>% filter(Jurisdiction == "Polk" | Jurisdiction == "Black Hawk"|
+               Jurisdiction == "Scott" | Jurisdiction == "Woodbury"|
+               Jurisdiction == "Pottawattamie" | Jurisdiction == "Linn"|
+               Jurisdiction == "Dubuque" | Jurisdiction == "Johnson"|
+               Jurisdiction == "Marshall" | Jurisdiction == "Des Moines") %>% 
+  ggplot()+
+  geom_area(aes(x = factor(`Fiscal Year Admitted`), y = pct_yrly_jur,
+                fill = Jurisdiction,
+                group = Jurisdiction), alpha = .8)+
+  scale_x_discrete(expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  scale_fill_paletteer_d("ggthemes::hc_default")+
+  labs(caption = "Figure-3: Trend in Crime Occurence Over the Years",
+       x = "Year",
+       y = "Yearly Percentage")+
+  theme_minimal()+
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+
+It is evident that counties like Polk and Black Hawk counties are the prime hot-spot for different kind of crimes in Iowa. Further investigation can be made to identify the reasons behind the high frequency of crime in these counties. 
+
+
+## Relationship of Crime Occurance with Demographic Factors
+
+We investigated How does the severity and frequency of crimes vary by demographic factors such as age, gender and race?
+
+We can see the severity and frequency of crimes over the 10 years for all the counties. This research will contribute to the understanding of the spatial and temporal patterns of crime and provide useful insights for policymakers and law enforcement agencies in developing effective crime prevention and intervention strategies.
+
+
+```{r,warning=FALSE,message=FALSE}
+data %>% group_by(`Age at Admission`, `Race & Ethnicity`, Sex) %>% 
+  count() %>% 
+  ungroup() %>% 
+  filter(`Race & Ethnicity` != "Unknown") %>% 
+  ggplot()+
+  geom_point(aes(x = `Age at Admission`,
+                 y = n, 
+                 color = `Race & Ethnicity`))+
+  facet_wrap(~ Sex)+
+  scale_color_manual(values = c("Red", "Blue", "DarkGreen", "Orange", "Purple"))+
+  labs(caption = "Figure-4: Relationship between Committing Crime with Age, Gender and Race",
+       x = "Age of Criminal",
+       y = "Frequency of Crime Occurance")+
+  theme_minimal()+
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+
+In Iowa, White people generally has the highest tendency of committing any kind of crime (Figure-4) followed by Black population. Although the frequency of crime committed by male Hispanic people are also high, the frequency of crime by female Hispanic people are not so significant. It is also noticeable that for all race and gender groups, most crimes were committed by the people aged between 20 to 40. It is a matter of concern that the crime tendency among the young people in Iowa is high. 
+
+
+###  The Ratio of Race & Ethnicity and Gender of Offenders
+
+
+Following the above analysis, we analyzed the relationship between race, gender, and offense type in more details to understand the demographics of individuals involved in criminal behavior. The analysis above shows the crime tendency among different age, gender and race group in general, however through this analysis we showed which type of crime is more prominent among different race groups. Two filled bar charts were created to visualize the analysis. This allowed us to see the proportion of different races and genders associated with each offense type and identify any patterns in offender demographics.
+
+
+```{r,warning=FALSE,message=FALSE}
+
+C <- data %>% 
+  select(`Race & Ethnicity`, `Sex`, `Offense Type`) %>% 
+  count(`Race & Ethnicity`, `Sex`, `Offense Type`) %>% 
+  filter(`Offense Type` != "Other Criminal" & `Offense Type` != "Other Offenses" & `Race & Ethnicity` != "Unknown") %>% 
+  drop_na()
+  
+C <- mutate(C, `Offense Type` = reorder(`Offense Type`, `n`))
+  
+p1 <- ggplot(C) +
+  geom_col(aes(x = n, y = `Offense Type` , fill = `Race & Ethnicity`), position = "fill") +
+  labs(caption = "Figure-5: Relationship between Committing Crime with Race & Ethnicity",
+       x ="Proportion",
+       y = "Offense Type") +
+  geom_vline(xintercept = 0.5, linetype = 2) 
+p1 + theme(plot.caption = element_text(hjust=0.5))
+
+```
+
+
+The horizontal line represents the average Race and Ethnicity percentage across all offense types. The chart shows that White percentage is above average for almost all offense types. Black percentage is the second highest among all races and Hispanic percentage is the third highest. However, the tendency of committing crime like drug possession and stolen property are even higher among White people while Black people are tend to be more involved in robbery. It is also noticeable that statistically all crime related to stolen property were committed by White people. The tendency of committing different types of crime in other race are comparatively low.
+
+
+```{r,warning=FALSE,message=FALSE}
+p2 <- ggplot(C) +
+  geom_col(aes( x = n, y = `Offense Type`,  fill = `Sex`), position = "fill") + 
+  geom_vline(xintercept = 0.5, linetype = 2) +
+   labs(caption = "Figure-6: Relationship between Committing Crime with Gender",
+        x ="Proportion",
+        y = "Offense Type") + theme(plot.caption = element_text(hjust=0.5))
+p2
+
+```
+
+
+We analyzed the correlation between gender and criminal behavior, following our examination of the relationship between race/ethnicity and crime. the filled bar plot indicates that the percentage of male offenders is significantly higher than female offenders, suggesting a strong correlation between gender and criminal behavior. However, female population were more involved in prostitution/pimping than male while all the crime related to animal cruelty were committed by male population in Iowa since 2013.
+
+
+## Effects of Age on Offense Type
+
+
+We also wanted to examine patterns in offending behavior across various age groups by analyzing the connection between crime description and age. A heat map can be a suitable option to visualize due to its ability to easily display patterns and correlations. Additionally, a heat map can handle large datasets and is useful for identifying trends over time.
+
+
+```{r,warning=FALSE,message=FALSE}
+B <-  data %>% 
+  select(`Age at Admission`, `Offense Type`, `Fiscal Year Admitted`) %>% 
+  filter(`Offense Type` != "Other Offenses" & `Offense Type` != "Animal Cruelty" & `Offense Type` != "Stolen Property" & `Offense Type` != "Prostitution/Pimping") %>%  
+  drop_na() 
+
+ggplot(B) +
+    geom_tile(aes(x = `Fiscal Year Admitted`,
+                  y = reorder(`Offense Type`, `Age at Admission` , na.rm = TRUE),
+                  fill = `Age at Admission`)) + 
+    scale_fill_gradient(low = "red", high = "white") +
+    scale_x_binned(expand = c(0, 0)) +
+    labs(caption = "Figure-7: Relationship between Committing Crime with Age",
+         y = NULL,
+         fill = "Age at Admission (years)") +
+    theme(plot.caption = element_text(hjust=0.5)) +
+    theme(legend.position = "top")
+
+```
+
+
+The heat map suggests a correlation between age and criminal behavior. For example, the darker cells in the plot show that younger individuals tend to commit more offenses, while the lighter cells indicate that older individuals are more likely to commit certain offenses. Specifically, the pattern of dark cells is more visible among individuals aged 20-40 years. This suggests that age plays a significant role in criminal behavior, with younger individuals being more prone to commit crimes like operating while intoxicated, kidnap, theft, drug abuse, assault, vandalism etc. in recent years compared to their older counterparts.
+
+
+## Impacts of Punishment Level on Frequency of Different Offenses
+
+We aimed to display the frequency of different crimes apart from other types of offense that were not defined properly and the average time offenders spent in jail. This visualization helped us understand the punishment given to offenders, how it relates to the severity of their crimes, and its effectiveness in reducing crime. To make it simpler, we used a bar chart to indicate the occurrence of each offense type and a dot chart to show the average jail time for each offense.
+
+
+```{r,warning=FALSE,message=FALSE}
+
+ggplot(C) +
+  geom_col(aes(x = `n`, y = `Offense Type`, fill = `Offense Type`)) +
+  labs(x = "Frequency of Offense Occurrence",
+       y = "Offense Type", 
+       caption = "Figure 8: Frequency of Offenses") +
+  theme(plot.caption = element_text(hjust=0))
+
+```
+
+The bar plot shows that Drug trafficking, Assault, and Burglary are the most common offenses with high frequencies of almost 10,000, 7000, and 6000, respectively. These three offenses have significantly higher frequencies than other offenses such as Animal Cruelty, Prostitution, and Stolen Property. We wanted to investigate whether more frequent offenses lead to longer average prison sentences for offenders.
+
+
+```{r,warning=FALSE,message=FALSE}
+thm <- theme_minimal() +
+    theme(text = element_text(size = 16)) +
+    theme(panel.border =
+              element_rect(fill = NA,
+                           color = "grey20"))
+ D <-  data %>% 
+  select(`Offense Type`, `Months Served`) %>% 
+  drop_na() %>% 
+  group_by(`Offense Type`) %>% 
+  summarize(`avg_month_served` = mean(`Months Served`)) %>%  
+  ungroup()
+
+D <- mutate(D,  `Offense Type` = reorder(`Offense Type`, `avg_month_served`))
+
+ggplot(D) +
+  geom_point(aes(x = avg_month_served, y = `Offense Type`)) +
+  labs(caption = "Figure 9: Average Months Served for Each Type of Offense",
+       x = "Months Served",
+       y ="Offense Type") +
+  theme(plot.caption = element_text(hjust=0.5))
+
+```
+
+
+The dot plot reveals that the offenses with the highest frequency do not necessarily have longer average prison sentences. For instance, Murder/Manslaughter has the longest average sentence of over 40 months, while Operating While Intoxicated has the shortest with less than 5 months. Interestingly, the bar chart shows that Operating While Intoxicated is the fifth most frequent offense, while Drug Trafficking, which has an average sentence of less than 15 months, is the most frequent offense. This indicates that people might be more inclined towards committing offenses that have shorter sentences.
+
+# Conclusion 
+
+Examining Iowa Prison Admission and Released data provides several insights. First, in Iowa a few types of crime are more frequently committed over the years. Drug trafficking is the most common offense type, followed by Assault and Burglary, with an average sentence of less than 15 months for these crimes. This indicates that High frequency crimes often have low punishment, which could be a contributing factor to the increasing crime rates. This highlights the need for attention to be directed towards this issue. Second. over the years counties like Polk, Black Hawk have been the hot spot of crime in Iowa. Iowa State and County government needs to focus on minimizing crime rates in these areas. In addition, crime rate was high among certain gender like male and race group like White American and Hispanic people.Moreover, young people are more likely to be involved in crimes, and the majority of offenders are male and White, followed by Black and Hispanic. Third, the percentage of crime rate has not changed significantly since 2013 according to the Iowa county map, further actions can lower the crime rate in the coming years. 
+
+Overall, The visualization shows that Iowa is not a state with a high rate of violent crime, but there is still room for improvement. Therefore, taking necessary actions can make Iowa one of the safest states in the United States. 
+
+
+# Recommendations
+* The rate of assault and different random offense like breaking of public order, other government offense etc. has been increased significantly in recent years. Iowa prison authorities should make necessary policies to handle such crimes.
+
+* County authorities of Polk, Black Hawk, Scott and Woodbury counties should investigate different socio-economic factors which can be the driving force for high rates of crime in those areas. 
+
+* Crime hot-spot county authorities should make more safety measures and more strict regulations to ensure public safety and minimize crime rates in their counties.
+
+* Different rehabilitation program and social awareness program can be organized among young residents of Iowa to inform them about the types of crime and the consequences to raise awareness and minimize the crime rate of specific age group.
+
+* More studies should be conducted to analyze different reasons behind the high rate of committing crime among White, Black and Hispanic male population in Iowa. 
