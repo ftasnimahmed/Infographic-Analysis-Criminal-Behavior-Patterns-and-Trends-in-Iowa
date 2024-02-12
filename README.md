@@ -17,19 +17,19 @@ The initial datasets are collected from Iowa Data portal (data.iowa.gov). For ad
 ## Variables of interest in two datasets are:
 
 ### Prison Admission Data
-Record ID
-Offender Number //
-Fiscal Year Admitted
-Sex
-Race & Ethnicity
-Supervising Institution
-Offense Type
-Offense Subtype
-Age at Admission
+Record ID,
+Offender Number,
+Fiscal Year Admitted,
+Sex,
+Race & Ethnicity,
+Supervising Institution,
+Offense Type,
+Offense Subtype,
+Age at Admission,
 Months Served
 
 ### Prison Release Data
-Record ID
+Record ID,
 Jurisdiction
 
 ## Data Pre-Processing
