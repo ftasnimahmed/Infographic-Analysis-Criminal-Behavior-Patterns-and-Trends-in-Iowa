@@ -31,3 +31,6 @@ Months Served
 ### Prison Release Data
 Record ID
 Jurisdiction
+
+## Data Pre-Processing
+For analyzing the research questions, the initial datasets are manipulated and manual transformation are done. Both data_admit and data_released were joined together to make a comprehensive dataset for addressing the research questions. Necessary variables were also created for data analysis. There are a number of variables in both datasets and some would be common after joining. To avoid redundancy the datasets were cut smaller with only the varibales of interests. For the purpose of analysis, some observations are merged together and some are given more intuitive names. For the purpose of analysis and visualization, the character variables are transformed into factor variables. To analyze some research questions, a few variables were created which contains the total number of offense per year and percentage of different offenses per year Offense Count, Yearly_total_offense would represent the total number of offense occurred per year.
